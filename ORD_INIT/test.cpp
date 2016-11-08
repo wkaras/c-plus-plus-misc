@@ -5,8 +5,8 @@
 template <char C>
 struct X
   {
-    X() { std::cout << "construct " << C << '\n'; }
-    ~X() { std::cout << "destroy " << C << '\n'; }
+    X() { std::cout << "construct " << C << std::endl; }
+    ~X() { std::cout << "destroy " << C << std::endl; }
   };
 
 template <char C>
@@ -34,6 +34,14 @@ extern Z<'f'> f;
 extern Z<'g'> g;
 
 #if CU == 1
+
+// I don't understand why the destructor for this is not called in
+// the first failure case in 'cmd'.
+//
+Z<'_'> underscore;
+
+template <>
+void Dep<'_'>::cons() { }
 
 Z<'a'> a;
 
