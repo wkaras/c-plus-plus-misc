@@ -27,7 +27,7 @@ and
 
 B b;
 
-are in different compilation units, but b's constructor depends on object a
+are in different compilation units, but a's constructor depends on object b
 being already initialized.  Then the declaration of b must be changed to
 
 Ord_init<B> b;
@@ -35,6 +35,22 @@ Ord_init<B> b;
 The first use of b by class A's constructor must be a call to b.init().
 Class B must have a parameterless constructor.  The object b will implicitly
 convert to B &, and b() will return B &.
+
+If class B does not have a parameterless constructor, and you don't wish
+to make any changes to class B, you can derive an auxiliary class from B.
+Even if b also has external dependencies.  For example:
+
+extern Ord_init<Class_of_object_b_depends_on> object_b_depends_on;
+
+struct B_aux_dep { B_aux_dep() { object_b_depends_on.init(); } };
+
+struct B_aux : private B_aux_dep, public B
+  { B_aux() : B(object_b_depends_on(), 666) { } };
+
+Ord_init<B_aux> b;
+
+As illustrated here, a reference to the object that b depends on must
+be a parameter to the constructor of class B.
 
 If the constructor for class B depends on another object, c say, then c
 must be declared using Ord_init:
@@ -45,12 +61,12 @@ even if c is defined in the same compilation unit as b.  B's constructor must
 call c.init() before making any other use of c.
 
 Ord_init takes a second class parameter called Traits, which defaults to
-Ort_init_default_traits.  If using a version of C++ earlier than C++11,
+Ord_init_default_traits.  If using a version of C++ earlier than C++11,
 Traits must define the public type Align_type.  Align_type must be a POD
 type, with the same alignment requirements as the first type parameter to
-Ord_init.  Traits must have a public member function cycle(uintptr_t).
-This is called when a cyclical initialization dependency of Ord_init objects
-is detected.
+Ord_init.  Traits must have a public member function cycle(uintptr_t)
+(any return value is ignored).  This is called when a cyclical initialization
+dependency of Ord_init objects is detected.
 
 This facility does not provide any guarantees as to the order that objects
 are destroyed in.
@@ -76,6 +92,8 @@ that depend on them, must be constructed within the same execution thread.
 
 #endif
 
+#include "ios_flag_save.h"
+
 struct Ord_init_default_traits
   {
     #if __cplusplus < 201100
@@ -99,11 +117,17 @@ struct Ord_init_default_traits
         { return("Ord_init constructor encountered cycle"); }
       };
 
+    IOS_FLAG_SAVE(Ifs)
+
     static void cycle(uintptr_t addr)
       {
-        std::cerr
-          << "Cyclical initializaion dependencies for object at address 0x"
-          << std::hex << addr << '\n';
+        {
+          Ifs sentry(std::cerr);
+
+          std::cerr
+            << "Cyclical initializaion dependencies for object at address 0x"
+            << std::hex << addr << '\n';
+        }
 
         throw Ord_init_cycle_exception();
       }
@@ -159,7 +183,11 @@ class Ord_init
 
     operator T & () { return((*this)()); }
 
-    ~Ord_init() { reinterpret_cast<T *>(raw)->~T(); }
+    ~Ord_init()
+      {
+        if (status == Init_done)
+          reinterpret_cast<T *>(raw)->~T();
+      }
 
   // No copying except through T reference.
   #if __cplusplus < 201100
