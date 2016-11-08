@@ -1,0 +1,37 @@
+# Execute with . command.
+
+if [[ "$YEAR" = "" ]] ; then
+    YEAR=98
+fi
+
+CC="gcc --std=c++${YEAR} --pedantic -Wall -Wextra"
+
+$CC -DCU=1 -c test.cpp -o 1.o
+$CC -DCU=2 -c test.cpp -o 2.o
+$CC -DCU=3 -c test.cpp -o 3.o
+
+$CC 1.o 2.o 3.o -lstdc++
+
+./a.out
+
+echo =====
+
+$CC 3.o 2.o 1.o -lstdc++
+
+./a.out
+
+echo =====
+
+$CC -DCU=3 -DFAIL -c test.cpp -o 3.o
+
+$CC 1.o 2.o 3.o -lstdc++
+
+./a.out
+
+echo =====
+
+$CC 3.o 2.o 1.o -lstdc++
+
+./a.out
+
+rm -f *.o
