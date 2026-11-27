@@ -1,7 +1,10 @@
 #include <cstdint>
 #include <string>
-// Remove this comment, and add additional header files as necessary.  Not necessarily Standard Library header
-// files.
+#include <mutex>
+#include <atomic>
+#include <ru_shared_mutex.h>
+#include <list.h>
+#include <hash_table.h>
 
 #pragma once
 
@@ -32,7 +35,65 @@ class Host_addr_tbl
     Host_addr_tbl() = delete;
 
   private:
-    // Remove this comment, add private members as necessary.  Make all data member inline static.
+
+    // Chain-bucket hash table node that can be in hash table 0 and hash table 1.
+    //
+    struct node_type
+      {
+        std::string host_name;
+        std::uint32_t ipv4_addr;
+
+        // link[0] is for hash table 0, link[1] is for hash table 1.
+        node_type *link[2];
+      };
+
+    template <unsigned hash_table_num>
+    struct list_abstractor
+      {
+        static const bool store_tail{false};
+
+        using handle = node_type *;
+
+        static handle null() { return nullptr; }
+
+        static void link(handle h, handle link_h) { h->link[hash_table_num] = link_h; }
+
+        static handle link(handle h) { return h->link[hash_table_num]; }
+      };
+
+    template <unsigned hash_table_num>
+    struct hash_tbl_abstractor
+      {
+        using list = abstract_container::list<list_abstractor<hash_table_num> >;
+
+        using index = std::size_t;
+
+        using key = const std::string *;
+
+        static const index num_hash_values{2 * 4096};
+
+        static index hash_key(key k) { return std::hash<std::string>()(*k) % num_hash_values; }
+
+        static index hash_elem(typename list::handle h) { return hash_key(&(h->host_name)); }
+
+        static bool is_key(key k, typename list::handle h) { return *k == h->host_name; }
+      };
+
+    static inline abstract_container::hash_table<hash_tbl_abstractor<0> > hash_tbl_0;
+
+    static inline abstract_container::hash_table<hash_tbl_abstractor<1> > hash_tbl_1;
+
+    static inline abstract_container::ru_shared_mutex::id id0, id1;
+
+    // Shared mutex to protect multi-thread access to hash_table 0.
+    //
+    using sh_mtx_0_type = abstract_container::ru_shared_mutex::c<id0>;
+    sh_mtx_0_type & sh_mtx_0 = sh_mtx_0_type::inst();
+
+    // Shared mutex to protect multi-thread access to hash_table 1.
+    //
+    using sh_mtx_1_type = abstract_container::ru_shared_mutex::c<id1>;
+    sh_mtx_1_type & sh_mtx_1 = sh_mtx_1_type::inst();
   };
 
 inline bool Host_addr_tbl::insert(std::string const &host_name, std::uint32_t ipv4_addr)
