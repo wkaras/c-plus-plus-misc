@@ -88,25 +88,103 @@ class Host_addr_tbl
     // Shared mutex to protect multi-thread access to hash_table 0.
     //
     using sh_mtx_0_type = abstract_container::ru_shared_mutex::c<id0>;
-    sh_mtx_0_type & sh_mtx_0 = sh_mtx_0_type::inst();
+    static inline sh_mtx_0_type & sh_mtx_0 = sh_mtx_0_type::inst();
 
     // Shared mutex to protect multi-thread access to hash_table 1.
     //
     using sh_mtx_1_type = abstract_container::ru_shared_mutex::c<id1>;
-    sh_mtx_1_type & sh_mtx_1 = sh_mtx_1_type::inst();
+    static inline sh_mtx_1_type & sh_mtx_1 = sh_mtx_1_type::inst();
+
+    // Mutex to prevent simultaneous insertions/removals.
+    //
+    static inline std::mutex change_mtx;
   };
 
 inline bool Host_addr_tbl::insert(std::string const &host_name, std::uint32_t ipv4_addr)
   {
-    // Remove this comment, add function implementation.
+    node_type *h;
+
+    auto hv{hash_tbl_0.hash_key(&host_name)};
+
+    std::unique_lock cml{change_mtx};
+
+    {
+      std::unique_lock sml{sh_mtx_0};
+
+      h = hash_tbl_0.search(&host_name, hv);
+
+      if (h)
+        return false;
+
+      h = new node_type;
+      h->host_name = host_name;
+      h->ipv4_addr = ipv4_addr;
+
+      hash_tbl_0.insert(h, hv);
+    }
+
+    {
+      std::unique_lock sml{sh_mtx_1};
+
+      hash_tbl_1.insert(h, hv);
+    }
+
+    return true;
   }
 
 inline bool Host_addr_tbl::remove(std::string const &host_name)
   {
-    // Remove this comment, add function implementation.
+    node_type *h;
+
+    std::unique_lock cml{change_mtx};
+
+    {
+      std::unique_lock sml{sh_mtx_0};
+
+      h = hash_tbl_0.remove_key(&host_name);
+
+      if (!h)
+        return false;
+    }
+
+    {
+      std::unique_lock sml{sh_mtx_1};
+
+      hash_tbl_0.remove(h);
+    }
+
+    delete h;
+
+    return true;
   }
 
 inline std::uint32_t Host_addr_tbl::lookup(std::string const &host_name)
   {
-    // Remove this comment, add function implementation.
+    unsigned which_hash_table;
+
+    for ( ; ; )
+      {
+        if (sh_mtx_0.try_lock_shared())
+          {
+            which_hash_table = 0;
+            break;
+          }
+        if (sh_mtx_1.try_lock_shared())
+          {
+            which_hash_table = 1;
+            break;
+          }
+      }
+
+    auto h{which_hash_table ? hash_tbl_1.search(&host_name) : hash_tbl_0.search(&host_name)};
+
+    if (which_hash_table)
+      sh_mtx_1.unlock_shared();
+    else
+      sh_mtx_0.unlock_shared();
+
+    if (!h)
+      return 0;
+
+    return h->ipv4_addr;
   }
