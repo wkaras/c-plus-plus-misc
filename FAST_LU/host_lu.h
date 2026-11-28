@@ -88,12 +88,12 @@ class Host_addr_tbl
     // Shared mutex to protect multi-thread access to hash_table 0.
     //
     using sh_mtx_0_type = abstract_container::ru_shared_mutex::c<id0>;
-    sh_mtx_0_type & sh_mtx_0 = sh_mtx_0_type::inst();
+    static inline sh_mtx_0_type & sh_mtx_0 = sh_mtx_0_type::inst();
 
     // Shared mutex to protect multi-thread access to hash_table 1.
     //
     using sh_mtx_1_type = abstract_container::ru_shared_mutex::c<id1>;
-    sh_mtx_1_type & sh_mtx_1 = sh_mtx_1_type::inst();
+    static inline sh_mtx_1_type & sh_mtx_1 = sh_mtx_1_type::inst();
   };
 
 inline bool Host_addr_tbl::insert(std::string const &host_name, std::uint32_t ipv4_addr)
