@@ -177,14 +177,12 @@ inline std::uint32_t Host_addr_tbl::lookup(std::string const &host_name)
       }
 
     auto h{which_hash_table ? hash_tbl_1.search(&host_name) : hash_tbl_0.search(&host_name)};
+    auto addr{h ? h->ipv4_addr : 0};
 
     if (which_hash_table)
       sh_mtx_1.unlock_shared();
     else
       sh_mtx_0.unlock_shared();
 
-    if (!h)
-      return 0;
-
-    return h->ipv4_addr;
+    return addr;
   }
