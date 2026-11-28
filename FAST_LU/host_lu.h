@@ -98,15 +98,63 @@ class Host_addr_tbl
 
 inline bool Host_addr_tbl::insert(std::string const &host_name, std::uint32_t ipv4_addr)
   {
-    // Remove this comment, add function implementation.
+    sh_mtx_0.lock();
+    sh_mtx_1.lock();
+
+    if (hash_tbl_0.search(&host_name) != hash_tbl_0.null())
+      {
+        sh_mtx_1.unlock();
+        sh_mtx_0.unlock();
+        return false;
+      }
+
+    node_type *node = new node_type{host_name, ipv4_addr, {nullptr, nullptr}};
+
+    hash_tbl_0.insert(node);
+    hash_tbl_1.insert(node);
+
+    sh_mtx_1.unlock();
+    sh_mtx_0.unlock();
+    return true;
   }
 
 inline bool Host_addr_tbl::remove(std::string const &host_name)
   {
-    // Remove this comment, add function implementation.
+    sh_mtx_0.lock();
+    sh_mtx_1.lock();
+
+    node_type *node = hash_tbl_0.remove_key(&host_name);
+    if (node == hash_tbl_0.null())
+      {
+        sh_mtx_1.unlock();
+        sh_mtx_0.unlock();
+        return false;
+      }
+
+    hash_tbl_1.remove(node);
+    delete node;
+
+    sh_mtx_1.unlock();
+    sh_mtx_0.unlock();
+    return true;
   }
 
 inline std::uint32_t Host_addr_tbl::lookup(std::string const &host_name)
   {
-    // Remove this comment, add function implementation.
+    sh_mtx_0.lock_shared();
+    node_type *node = hash_tbl_0.search(&host_name);
+
+    if (node == hash_tbl_0.null())
+      {
+        sh_mtx_0.unlock_shared();
+        sh_mtx_1.lock_shared();
+        node = hash_tbl_1.search(&host_name);
+        sh_mtx_1.unlock_shared();
+
+        return node == hash_tbl_1.null() ? 0 : node->ipv4_addr;
+      }
+
+    std::uint32_t addr = node->ipv4_addr;
+    sh_mtx_0.unlock_shared();
+    return addr;
   }
