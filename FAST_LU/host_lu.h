@@ -150,7 +150,7 @@ inline bool Host_addr_tbl::remove(std::string const &host_name)
     {
       std::unique_lock sml{sh_mtx_1};
 
-      hash_tbl_0.remove(h);
+      hash_tbl_1.remove(h);
     }
 
     delete h;
